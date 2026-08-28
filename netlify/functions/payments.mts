@@ -1,7 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getActor } from "./_shared/auth";
 import { fail, ok } from "./_shared/response";
-import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
+import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, isoFromGoogleSerial, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
 
 const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 function num(v: unknown) { const n = Number(String(v ?? "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; }
@@ -29,8 +29,39 @@ export default async (req: Request, context: Context) => {
 
   if (req.method === "GET") {
     try {
-      const raw = await readRange("Payments!A1:R10000", "FORMATTED_VALUE");
-      return ok(rowsToObjects(raw), requestId);
+      const url = new URL(req.url);
+      const studentIdFilter = String(url.searchParams.get("studentId") || "").trim();
+      const yearFilter = Number(url.searchParams.get("year") || 0);
+      const monthFilter = String(url.searchParams.get("month") || "").trim();
+      const raw = await readRange("Payments!A1:R10000", "UNFORMATTED_VALUE");
+      const rows = rowsToObjects(raw) as Record<string, unknown>[];
+      const data = rows
+        .filter(r => !studentIdFilter || String(r["Student ID"] || "") === studentIdFilter)
+        .filter(r => !yearFilter || num(r["Year"]) === yearFilter)
+        .filter(r => !monthFilter || String(r["Month"] || "") === monthFilter)
+        .map(r => ({
+          id: String(r["Payment ID"] || ""),
+          feeRecordId: String(r["Fee Record ID"] || ""),
+          studentId: String(r["Student ID"] || ""),
+          year: num(r["Year"]),
+          month: String(r["Month"] || ""),
+          paymentDate: isoFromGoogleSerial(r["Payment Date"]),
+          amount: num(r["Amount"]),
+          paymentMethod: String(r["Payment Method"] || ""),
+          receiptRef: String(r["Receipt / Ref"] || ""),
+          notes: String(r["Notes"] || ""),
+          status: String(r["Status"] || ""),
+          recordedBy: String(r["Recorded By"] || ""),
+          recordedAt: String(r["Recorded At"] || ""),
+          updatedBy: String(r["Updated By"] || ""),
+          updatedAt: String(r["Updated At"] || ""),
+          correctionReason: String(r["Correction Reason"] || ""),
+          version: num(r["Record Version"]),
+          requestId: String(r["Request ID"] || ""),
+        }))
+        .sort((a,b) => (b.updatedAt || b.recordedAt).localeCompare(a.updatedAt || a.recordedAt))
+        .slice(0, 100);
+      return ok(data, requestId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       if (message.includes("MISSING") || message.includes("AUTH_FAILED")) return fail("SHEET_CONFIGURATION_REQUIRED", "Google Sheets backend credentials are not configured yet.", requestId, 503);
