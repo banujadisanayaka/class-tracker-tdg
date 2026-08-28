@@ -9,3 +9,9 @@ export interface StudentCreateInput { name:string;birthday?:string;admitDate:str
 export interface AttendanceSaveInput { classId:string;date:string;entries:Array<{studentId:string;status:string;checkInTime?:string;notes?:string}>; }
 export interface PaymentInput { studentId:string;year:number;month:string;paymentDate:string;amount:number;paymentMethod:string;receiptRef?:string;notes?:string; }
 export interface ApiEnvelope<T>{success:boolean;requestId:string;data?:T;error?:{code:string;message:string};}
+
+export interface AttendanceRecord { id:string;date:string;studentId:string;studentName:string;status:string;checkInTime:string;className:string;classId:string;notes:string;sessionId:string;version:number;recordStatus:string;updatedAt:string; }
+export interface PaymentRecord { id:string;feeRecordId:string;studentId:string;year:number;month:string;paymentDate:string;amount:number;paymentMethod:string;receiptRef:string;notes:string;status:string;recordedBy:string;recordedAt:string;updatedBy:string;updatedAt:string;correctionReason:string;version:number;requestId:string; }
+export interface AttendanceCorrectionInput { status:string;checkInTime?:string;notes?:string;reason:string;expectedVersion:number; }
+export interface PaymentCorrectionInput { amount:number;paymentDate:string;paymentMethod:string;receiptRef?:string;notes?:string;reason:string;expectedVersion:number; }
+export interface PaymentVoidInput { reason:string;expectedVersion:number; }
