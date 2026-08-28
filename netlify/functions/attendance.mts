@@ -56,11 +56,32 @@ export default async (req: Request, context: Context) => {
     const enrollments = rowsToObjects(enrollRaw) as Record<string, unknown>[];
     const sessions = rowsToObjects(sessionsRaw) as Record<string, unknown>[];
     const attendance = rowsToObjects(attendanceRaw) as Record<string, unknown>[];
+    const audit = rowsToObjects(auditRaw) as Record<string, unknown>[];
+    const previousRequest = audit.find(a =>
+      String(a["Request ID"] || "") === requestId &&
+      norm(a["Module"]) === "attendance" &&
+      norm(a["Action"]) === "create_batch" &&
+      norm(a["Result"]) === "success"
+    );
+    if (previousRequest) {
+      return ok({
+        sessionId: String(previousRequest["Record ID"] || ""),
+        classId,
+        date,
+        saved: entries.length,
+        idempotent: true,
+      }, requestId);
+    }
     const klass = classes.find(c => String(c["Class ID"]) === classId && norm(c["Status"]) === "active");
     if (!klass) return fail("VALIDATION_ERROR", "The selected class is invalid or inactive.", requestId, 422);
 
     const studentMap = new Map(students.map(s => [String(s["Student ID"]), s]));
-    const validEnrollment = new Set(enrollments.filter(e => String(e["Class ID"]) === classId && norm(e["Status"]) === "active").map(e => String(e["Student ID"])));
+    const validEnrollment = new Set(enrollments.filter(e => {
+      if (String(e["Class ID"]) !== classId || norm(e["Status"]) !== "active") return false;
+      const from = Number(e["Enrolled From"] || 0);
+      const until = Number(e["Enrolled Until"] || 0);
+      return (from <= 0 || from <= dateSerial) && (until <= 0 || until >= dateSerial);
+    }).map(e => String(e["Student ID"])));
     for (const e of entries) {
       const sid = String(e.studentId);
       const student = studentMap.get(sid);
