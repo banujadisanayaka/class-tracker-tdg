@@ -8,9 +8,39 @@ function b64url(input: Uint8Array | string) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function normalizePrivateKey(pem: string) {
+  let normalized = pem.trim();
+
+  if (
+    (normalized.startsWith("\"") && normalized.endsWith("\"")) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+
+  normalized = normalized
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n");
+
+  return normalized;
+}
+
 function pemToArrayBuffer(pem: string) {
-  const clean = pem.replace(/\\n/g, "\n").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
-  const binary = atob(clean);
+  const clean = normalizePrivateKey(pem)
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
+
+  if (!clean || !/^[A-Za-z0-9+/=]+$/.test(clean)) {
+    throw new Error("GOOGLE_PRIVATE_KEY_FORMAT_INVALID");
+  }
+
+  let binary: string;
+  try {
+    binary = atob(clean);
+  } catch {
+    throw new Error("GOOGLE_PRIVATE_KEY_BASE64_INVALID");
+  }
+
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
@@ -24,7 +54,13 @@ async function accessToken() {
   const header = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = b64url(JSON.stringify({ iss: email, scope: SHEETS_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 }));
   const unsigned = `${header}.${payload}`;
-  const key = await crypto.subtle.importKey("pkcs8", pemToArrayBuffer(privateKey), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  let key: CryptoKey;
+  try {
+    key = await crypto.subtle.importKey("pkcs8", pemToArrayBuffer(privateKey), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("GOOGLE_PRIVATE_KEY_")) throw error;
+    throw new Error("GOOGLE_PRIVATE_KEY_IMPORT_FAILED");
+  }
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
   const assertion = `${unsigned}.${b64url(new Uint8Array(signature))}`;
   const response = await fetch(TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
