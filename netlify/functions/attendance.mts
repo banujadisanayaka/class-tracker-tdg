@@ -1,7 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getActor } from "./_shared/auth";
 import { fail, ok } from "./_shared/response";
-import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
+import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, isoFromGoogleSerial, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
 
 const allowedStatuses = new Set(["Present", "Absent", "Late", "Excused"]);
 function norm(v: unknown) { return String(v ?? "").trim().toLowerCase(); }
@@ -13,6 +13,14 @@ function timeFraction(v: string | undefined) {
   if (h > 23 || min > 59) return null;
   return (h * 60 + min) / 1440;
 }
+function timeString(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n >= 1) return "";
+  const total = Math.round(n * 1440);
+  const h = String(Math.floor(total / 60) % 24).padStart(2, "0");
+  const m = String(total % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
 
 interface AttendanceEntry { studentId?: string; status?: string; checkInTime?: string; notes?: string; }
 interface AttendanceBody { classId?: string; date?: string; entries?: AttendanceEntry[]; }
@@ -21,6 +29,43 @@ export default async (req: Request, context: Context) => {
   const requestId = req.headers.get("x-request-id") || context.requestId;
   const actor = getActor(req);
   if (!actor) return fail("AUTH_REQUIRED", "Secure login is not configured for this environment.", requestId, 401);
+
+  if (req.method === "GET") {
+    try {
+      const url = new URL(req.url);
+      const classId = String(url.searchParams.get("classId") || "").trim();
+      const date = String(url.searchParams.get("date") || "").trim();
+      const dateSerial = date ? dateSerialFromIso(date) : null;
+      if (date && dateSerial === null) return fail("VALIDATION_ERROR", "Attendance date is invalid.", requestId, 422);
+      const raw = await readRange("Attendance!A1:Q5000", "UNFORMATTED_VALUE");
+      const rows = rowsToObjects(raw) as Record<string, unknown>[];
+      const data = rows
+        .filter(r => !classId || String(r["Class ID"] || "") === classId)
+        .filter(r => dateSerial === null || Number(r["Date"] || 0) === dateSerial)
+        .map(r => ({
+          id: String(r["Attendance ID"] || ""),
+          date: isoFromGoogleSerial(r["Date"]),
+          studentId: String(r["Student ID"] || ""),
+          studentName: String(r["Student Name (Auto)"] || ""),
+          status: String(r["Attendance Status"] || ""),
+          checkInTime: timeString(r["Check-in Time"]),
+          className: String(r["Class / Subject"] || ""),
+          classId: String(r["Class ID"] || ""),
+          notes: String(r["Notes"] || ""),
+          sessionId: String(r["Session ID"] || ""),
+          version: Number(r["Record Version"] || 0),
+          recordStatus: String(r["Record Status"] || "Active"),
+          updatedAt: String(r["Updated At"] || r["Marked At"] || ""),
+        }))
+        .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+      return ok(data, requestId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      if (message.includes("MISSING") || message.includes("AUTH_FAILED")) return fail("SHEET_CONFIGURATION_REQUIRED", "Google Sheets backend credentials are not configured yet.", requestId, 503);
+      return fail("SHEET_READ_FAILED", "Attendance records could not be loaded.", requestId, 502);
+    }
+  }
+
   if (req.method !== "POST") return fail("METHOD_NOT_ALLOWED", "Method not allowed.", requestId, 405);
 
   try {
