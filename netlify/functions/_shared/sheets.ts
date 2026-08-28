@@ -157,6 +157,16 @@ export function dateSerialFromIso(value: string) {
   return Math.floor((utc - Date.UTC(1899, 11, 30)) / 86400000);
 }
 
+export function isoFromGoogleSerial(value: unknown) {
+  const serial = Number(value);
+  if (!Number.isFinite(serial) || serial <= 0) return "";
+  const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function shortId(prefix: string) {
   return `${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
 }
