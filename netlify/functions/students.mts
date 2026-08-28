@@ -1,7 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getActor } from "./_shared/auth";
 import { fail, ok } from "./_shared/response";
-import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
+import { batchUpdate, dateSerialFromIso, getSheetIds, insertRowsRequest, isoFromGoogleSerial, readRange, rowsToObjects, shortId, userValue } from "./_shared/sheets";
 
 function num(v: unknown) {
   const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
@@ -40,13 +40,13 @@ export default async (req: Request, context: Context) => {
 
   if (req.method === "GET") {
     try {
-      const raw = await readRange("Students!A1:V1000", "FORMATTED_VALUE");
+      const raw = await readRange("Students!A1:V1000", "UNFORMATTED_VALUE");
       const rows = rowsToObjects(raw) as Record<string, unknown>[];
       return ok(rows.map(r => ({
         id: String(r["Student ID"] || ""),
         name: String(r["Student Name"] || ""),
-        birthday: String(r["Birthday"] || ""),
-        admitDate: String(r["Admit Date"] || ""),
+        birthday: isoFromGoogleSerial(r["Birthday"]),
+        admitDate: isoFromGoogleSerial(r["Admit Date"]),
         phone: String(r["Student Telephone"] || ""),
         whatsapp: String(r["Student WhatsApp"] || ""),
         guardianName: String(r["Parent / Guardian Name"] || ""),
@@ -81,19 +81,42 @@ export default async (req: Request, context: Context) => {
     if (!classIds.length) return fail("VALIDATION_ERROR", "Select at least one class.", requestId, 422);
 
     const [studentsRaw, classesRaw, enrollmentsRaw, auditRaw] = await Promise.all([
-      readRange("Students!A1:V1000", "FORMATTED_VALUE"),
+      readRange("Students!A1:V1000", "UNFORMATTED_VALUE"),
       readRange("Classes!A1:P1000", "FORMATTED_VALUE"),
       readRange("Enrollments!A1:L5000", "UNFORMATTED_VALUE"),
       readRange("'Audit Log'!A1:P20000", "UNFORMATTED_VALUE"),
     ]);
     const students = rowsToObjects(studentsRaw) as Record<string, unknown>[];
     const classes = rowsToObjects(classesRaw) as Record<string, unknown>[];
+    const audit = rowsToObjects(auditRaw) as Record<string, unknown>[];
+    const previousRequest = audit.find(a =>
+      String(a["Request ID"] || "") === requestId &&
+      norm(a["Module"]) === "students" &&
+      norm(a["Action"]) === "create" &&
+      norm(a["Result"]) === "success"
+    );
+    if (previousRequest) {
+      const existingId = String(previousRequest["Record ID"] || "");
+      const existing = students.find(s => String(s["Student ID"]) === existingId);
+      return ok({
+        id: existingId,
+        name: String(existing?.["Student Name"] || name),
+        status: String(existing?.["Status"] || "Active"),
+        classIds,
+        idempotent: true,
+      }, requestId);
+    }
     const selectedClasses = classIds.map(id => classes.find(c => String(c["Class ID"]) === id && norm(c["Status"]) === "active")).filter(Boolean) as Record<string, unknown>[];
     if (selectedClasses.length !== classIds.length) return fail("VALIDATION_ERROR", "One or more selected classes are invalid or inactive.", requestId, 422);
 
     const birthday = String(body.birthday || "").trim();
+    const birthdaySerial = birthday ? dateSerialFromIso(birthday) : null;
+    if (birthday && birthdaySerial === null) return fail("VALIDATION_ERROR", "Birthday must be a valid date.", requestId, 422);
     const phone = String(body.phone || "").trim();
-    const duplicate = students.find(s => norm(s["Student Name"]) === norm(name) && ((phone && String(s["Student Telephone"] || "").trim() === phone) || (birthday && String(s["Birthday"] || "").trim() === birthday)));
+    const duplicate = students.find(s => norm(s["Student Name"]) === norm(name) && (
+      (phone && String(s["Student Telephone"] || "").trim() === phone) ||
+      (birthdaySerial !== null && Number(s["Birthday"]) === birthdaySerial)
+    ));
     if (duplicate && !body.forceDuplicate) {
       return fail("POSSIBLE_DUPLICATE", `A similar student already exists (${String(duplicate["Student ID"])}). Review that profile before adding another record.`, requestId, 409);
     }
@@ -105,8 +128,6 @@ export default async (req: Request, context: Context) => {
     const nextRowNumber = studentsRaw.length + 1;
     const studentRowIndex = nextRowNumber - 1;
     const admitSerial = dateSerialFromIso(admitDate)!;
-    const birthdaySerial = birthday ? dateSerialFromIso(birthday) : null;
-    if (birthday && birthdaySerial === null) return fail("VALIDATION_ERROR", "Birthday must be a valid date.", requestId, 422);
     const primaryClass = String(selectedClasses[0]["Class Name"] || "");
     const ageFormula = `=IF(C${nextRowNumber}="","",DATEDIF(C${nextRowNumber},TODAY(),"Y"))`;
     const feeFormula = `=IF(A${nextRowNumber}="","",IFERROR(LOOKUP(2,1/(('Fee Changes'!$A$2:$A$1000=A${nextRowNumber})*('Fee Changes'!$B$2:$B$1000<=TODAY())),'Fee Changes'!$C$2:$C$1000),IF(M${nextRowNumber}<>"",M${nextRowNumber},Settings!$B$3)))`;
