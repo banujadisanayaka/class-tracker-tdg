@@ -13,7 +13,7 @@ export default function AttendancePage(){
  const [marked,setMarked]=useState<Record<string,string>>({});
  const [notice,setNotice]=useState("");
  const [error,setError]=useState("");
- const students=useQuery({queryKey:["class-students",classId],queryFn:()=>api.classStudents(classId),enabled:!!classId});
+ const students=useQuery({queryKey:["class-students",classId,date],queryFn:()=>api.classStudents(classId,date),enabled:!!classId});
  useEffect(()=>{setMarked({});setNotice("");setError("");},[classId,date]);
  const activeClasses=useMemo(()=>classes.data?.filter(c=>c.status.toLowerCase()==="active")||[],[classes.data]);
  const complete=students.data?.length?students.data.every(s=>!!marked[s.id]):false;
