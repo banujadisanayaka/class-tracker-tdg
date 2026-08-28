@@ -150,10 +150,23 @@ export function userValue(value: unknown) {
 }
 
 export function dateSerialFromIso(value: string) {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   if (!match) return null;
-  const [, y, m, d] = match;
-  const utc = Date.UTC(Number(y), Number(m) - 1, Number(d));
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = Date.UTC(year, month - 1, day);
+  const date = new Date(utc);
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
   return Math.floor((utc - Date.UTC(1899, 11, 30)) / 86400000);
 }
 
