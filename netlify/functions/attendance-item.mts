@@ -21,11 +21,13 @@ export default async (req: Request, context: Context) => {
   if (!attendanceId) return fail("VALIDATION_ERROR", "Attendance ID is required.", requestId, 422);
 
   try {
-    const body = await req.json() as { status?: string; checkInTime?: string; notes?: string; reason?: string };
+    const body = await req.json() as { status?: string; checkInTime?: string; notes?: string; reason?: string; expectedVersion?: number };
     const status = String(body.status || "").trim();
     const reason = String(body.reason || "").trim();
+    const expectedVersion = Number(body.expectedVersion);
     if (!allowedStatuses.has(status)) return fail("VALIDATION_ERROR", "A valid attendance status is required.", requestId, 422);
     if (!reason) return fail("VALIDATION_ERROR", "A correction reason is required.", requestId, 422);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) return fail("VALIDATION_ERROR", "The current record version is required.", requestId, 422);
     const checkIn = timeFraction(body.checkInTime);
     if (checkIn === null) return fail("VALIDATION_ERROR", "Check-in time is invalid.", requestId, 422);
 
@@ -35,11 +37,26 @@ export default async (req: Request, context: Context) => {
     ]);
     const rawIndex = raw.findIndex((row, i) => i > 0 && String(row[8] ?? "") === attendanceId);
     if (rawIndex < 1) return fail("NOT_FOUND", "Attendance record not found.", requestId, 404);
+    const previousRequest = auditRaw.find((row, i) =>
+      i > 0 &&
+      String(row[14] ?? "") === requestId &&
+      String(row[5] ?? "").toUpperCase() === "UPDATE" &&
+      String(row[8] ?? "") === attendanceId &&
+      String(row[15] ?? "").toLowerCase() === "success"
+    );
+    if (previousRequest) {
+      const row = raw[rawIndex];
+      return ok({ attendanceId, status: String(row[3] ?? ""), version: Number(row[15] || 0), idempotent: true }, requestId);
+    }
     const row = raw[rawIndex];
+    const currentVersion = Number(row[15] || 0);
+    const recordStatus = String(row[16] ?? "Active");
+    if (recordStatus.toLowerCase() === "voided") return fail("INVALID_STATE", "Voided attendance cannot be corrected.", requestId, 409);
+    if (currentVersion !== expectedVersion) return fail("VERSION_CONFLICT", "This attendance record changed after you opened it. Reload before correcting it.", requestId, 409);
     const oldStatus = String(row[3] ?? "");
     const oldCheckIn = row[4] ?? "";
     const oldNotes = String(row[6] ?? "");
-    const version = Number(row[15] || 0) + 1;
+    const version = currentVersion + 1;
     const studentId = String(row[1] ?? "");
     const classId = String(row[10] ?? "");
     const now = new Date().toISOString();
