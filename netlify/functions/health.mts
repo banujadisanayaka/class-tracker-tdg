@@ -7,12 +7,15 @@ function diagnosticCode(error: unknown) {
   if (!(error instanceof Error)) return "UNKNOWN_RUNTIME_ERROR";
   const message = error.message || "";
   if (message.includes("GOOGLE_CREDENTIALS_MISSING")) return "GOOGLE_CREDENTIALS_MISSING";
+  if (message.includes("GOOGLE_PRIVATE_KEY_FORMAT_INVALID")) return "GOOGLE_PRIVATE_KEY_FORMAT_INVALID";
+  if (message.includes("GOOGLE_PRIVATE_KEY_BASE64_INVALID")) return "GOOGLE_PRIVATE_KEY_BASE64_INVALID";
+  if (message.includes("GOOGLE_PRIVATE_KEY_IMPORT_FAILED")) return "GOOGLE_PRIVATE_KEY_IMPORT_FAILED";
   if (message.includes("GOOGLE_AUTH_FAILED")) return "GOOGLE_AUTH_FAILED";
   if (message.includes("GOOGLE_SHEET_ID_MISSING")) return "GOOGLE_SHEET_ID_MISSING";
   if (message.includes("SHEET_READ_FAILED:403")) return "SHEET_READ_FORBIDDEN";
   if (message.includes("SHEET_READ_FAILED:404")) return "SHEET_NOT_FOUND";
   if (message.includes("SHEET_READ_FAILED")) return "SHEET_READ_FAILED";
-  if (error.name === "DataError" || error.name === "SyntaxError") return "PRIVATE_KEY_PARSE_FAILED";
+  if (["DataError", "SyntaxError", "InvalidCharacterError", "OperationError"].includes(error.name)) return "PRIVATE_KEY_PARSE_FAILED";
   return "GOOGLE_BACKEND_RUNTIME_ERROR";
 }
 
