@@ -28,6 +28,8 @@ export default async (req: Request, context: Context) => {
     const activeStudents=students.filter(x=>String(x["Status"]).toLowerCase()==="active");
     const todayClasses=classes.filter(x=>String(x["Status"]).toLowerCase()==="active" && String(x["Default Day"]).toLowerCase()===p.weekday.toLowerCase());
     const todayIds=new Set(todayClasses.map(x=>String(x["Class ID"])));
+    const monthIndex = ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(p.month);
+    const todaySerial = Math.floor((Date.UTC(p.year, monthIndex, p.day) - Date.UTC(1899, 11, 30)) / 86400000);
     const todayStudentIds=new Set(enroll.filter(x=>{
       if(String(x["Status"]).toLowerCase()!=="active" || !todayIds.has(String(x["Class ID"]))) return false;
       const from=number(x["Enrolled From"]);
@@ -40,9 +42,10 @@ export default async (req: Request, context: Context) => {
     const paid=monthFees.filter(x=>String(x["Status (Auto)"]).toLowerCase()==="paid").length;
     const partial=monthFees.filter(x=>String(x["Status (Auto)"]).toLowerCase()==="partial").length;
     const unpaid=monthFees.filter(x=>String(x["Status (Auto)"]).toLowerCase()==="unpaid").length;
-    const monthIndex = ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(p.month);
-    const todaySerial = Math.floor((Date.UTC(p.year, monthIndex, p.day) - Date.UTC(1899, 11, 30)) / 86400000);
-    const attendanceMarked=attendance.filter(x=>number(x["Date"])===todaySerial).length;
+    const attendanceMarked=attendance.filter(x=>
+      number(x["Date"])===todaySerial &&
+      String(x["Record Status"] || "Active").toLowerCase()!=="voided"
+    ).length;
     return ok({dateLabel:p.label,activeStudents:activeStudents.length,todayStudents:todayStudentIds.size,todayClasses:todayClasses.length,attendanceMarked,collectedThisMonth:collected,outstandingThisMonth:outstanding,paidStudents:paid,partialStudents:partial,unpaidStudents:unpaid,systemStatus:"healthy",systemMessage:"Google Sheets is connected and responding."}, requestId);
   } catch (error) {
     const message=error instanceof Error?error.message:"Unknown error";
