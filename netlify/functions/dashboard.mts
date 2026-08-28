@@ -18,7 +18,7 @@ export default async (req: Request, context: Context) => {
     const tz = Netlify.env.get("APP_TIME_ZONE") || "Asia/Colombo";
     const p = localParts(tz);
     const [studentsRaw, classesRaw, enrollRaw, feesRaw, attendanceRaw] = await Promise.all([
-      readRange("Students!A1:V1000", "FORMATTED_VALUE"), readRange("Classes!A1:P1000", "FORMATTED_VALUE"), readRange("Enrollments!A1:L5000", "FORMATTED_VALUE"), readRange("'Fee Tracker'!A1:R2000", "FORMATTED_VALUE"), readRange("Attendance!A1:Q5000", "UNFORMATTED_VALUE")
+      readRange("Students!A1:V1000", "FORMATTED_VALUE"), readRange("Classes!A1:P1000", "FORMATTED_VALUE"), readRange("Enrollments!A1:L5000", "UNFORMATTED_VALUE"), readRange("'Fee Tracker'!A1:R2000", "FORMATTED_VALUE"), readRange("Attendance!A1:Q5000", "UNFORMATTED_VALUE")
     ]);
     const students=rowsToObjects(studentsRaw) as Record<string,unknown>[];
     const classes=rowsToObjects(classesRaw) as Record<string,unknown>[];
@@ -28,7 +28,12 @@ export default async (req: Request, context: Context) => {
     const activeStudents=students.filter(x=>String(x["Status"]).toLowerCase()==="active");
     const todayClasses=classes.filter(x=>String(x["Status"]).toLowerCase()==="active" && String(x["Default Day"]).toLowerCase()===p.weekday.toLowerCase());
     const todayIds=new Set(todayClasses.map(x=>String(x["Class ID"])));
-    const todayStudentIds=new Set(enroll.filter(x=>String(x["Status"]).toLowerCase()==="active" && todayIds.has(String(x["Class ID"]))).map(x=>String(x["Student ID"])));
+    const todayStudentIds=new Set(enroll.filter(x=>{
+      if(String(x["Status"]).toLowerCase()!=="active" || !todayIds.has(String(x["Class ID"]))) return false;
+      const from=number(x["Enrolled From"]);
+      const until=number(x["Enrolled Until"]);
+      return (from<=0 || from<=todaySerial) && (until<=0 || until>=todaySerial);
+    }).map(x=>String(x["Student ID"])));
     const monthFees=fees.filter(x=>number(x["Year"])===p.year && String(x["Month"]).toLowerCase()===p.month.toLowerCase());
     const collected=monthFees.reduce((s,x)=>s+number(x["Amount Paid (Total This Month)"]),0);
     const outstanding=monthFees.reduce((s,x)=>s+number(x["Balance (Auto)"]),0);
