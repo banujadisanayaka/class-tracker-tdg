@@ -1,7 +1,7 @@
 import type { Config, Context } from "@netlify/functions";
 import { getActor } from "./_shared/auth";
 import { fail, ok } from "./_shared/response";
-import { readRange, rowsToObjects } from "./_shared/sheets";
+import { dateSerialFromIso, readRange, rowsToObjects } from "./_shared/sheets";
 
 function norm(v:unknown){return String(v??"").trim().toLowerCase();}
 export default async(req:Request,context:Context)=>{
@@ -10,11 +10,20 @@ export default async(req:Request,context:Context)=>{
   if(req.method!=="GET") return fail("METHOD_NOT_ALLOWED","Method not allowed.",requestId,405);
   const classId=context.params.id;
   if(!classId) return fail("VALIDATION_ERROR","Class ID is required.",requestId,422);
+  const requestedDate=new URL(req.url).searchParams.get("date")||"";
+  const dateSerial=requestedDate?dateSerialFromIso(requestedDate):null;
+  if(requestedDate && dateSerial===null) return fail("VALIDATION_ERROR","Date is invalid.",requestId,422);
   try{
-    const [studentsRaw,enrollRaw]=await Promise.all([readRange("Students!A1:V1000","FORMATTED_VALUE"),readRange("Enrollments!A1:L5000","FORMATTED_VALUE")]);
+    const [studentsRaw,enrollRaw]=await Promise.all([readRange("Students!A1:V1000","FORMATTED_VALUE"),readRange("Enrollments!A1:L5000","UNFORMATTED_VALUE")]);
     const students=rowsToObjects(studentsRaw) as Record<string,unknown>[];
     const enrollments=rowsToObjects(enrollRaw) as Record<string,unknown>[];
-    const ids=new Set(enrollments.filter(e=>String(e["Class ID"])===classId&&norm(e["Status"])==="active").map(e=>String(e["Student ID"])));
+    const ids=new Set(enrollments.filter(e=>{
+      if(String(e["Class ID"])!==classId || norm(e["Status"])!=="active") return false;
+      if(dateSerial===null) return true;
+      const from=Number(e["Enrolled From"]||0);
+      const until=Number(e["Enrolled Until"]||0);
+      return (from<=0 || from<=dateSerial) && (until<=0 || until>=dateSerial);
+    }).map(e=>String(e["Student ID"])));
     return ok(students.filter(s=>ids.has(String(s["Student ID"]))&&norm(s["Status"])==="active").map(s=>({id:String(s["Student ID"]),name:String(s["Student Name"]),phone:String(s["Student Telephone"]||""),status:String(s["Status"])})),requestId);
   }catch(error){
     const message=error instanceof Error?error.message:"Unknown error";
