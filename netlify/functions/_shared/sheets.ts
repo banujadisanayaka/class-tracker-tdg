@@ -65,6 +65,7 @@ export function rowsToObjects(rows: unknown[][]) {
   return rows.slice(1).filter(row => row.some(v => v !== "" && v != null)).map(row => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ""])));
 }
 
+
 export async function getSheetIds() {
   const token = await accessToken();
   const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId()}`);
