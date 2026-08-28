@@ -16,9 +16,11 @@ export default async (req: Request, context: Context) => {
   if(!paymentId) return fail("VALIDATION_ERROR","Payment ID is required.",requestId,422);
 
   try{
-    const body=await req.json() as { amount?:number; paymentDate?:string; paymentMethod?:string; receiptRef?:string; notes?:string; reason?:string };
+    const body=await req.json() as { amount?:number; paymentDate?:string; paymentMethod?:string; receiptRef?:string; notes?:string; reason?:string; expectedVersion?:number };
     const reason=String(body.reason||"").trim();
+    const expectedVersion=Number(body.expectedVersion);
     if(!reason) return fail("VALIDATION_ERROR","A correction reason is required.",requestId,422);
+    if(!Number.isInteger(expectedVersion)||expectedVersion<1) return fail("VALIDATION_ERROR","The current record version is required.",requestId,422);
     const [paymentsRaw,feesRaw,auditRaw]=await Promise.all([
       readRange("Payments!A1:R10000","UNFORMATTED_VALUE"),
       readRange("'Fee Tracker'!A1:R2000","UNFORMATTED_VALUE"),
@@ -26,16 +28,27 @@ export default async (req: Request, context: Context) => {
     ]);
     const rawIndex=paymentsRaw.findIndex((row,i)=>i>0 && String(row[0]??"")===paymentId);
     if(rawIndex<1) return fail("NOT_FOUND","Payment record not found.",requestId,404);
+    const action=req.method==="DELETE"?"VOID":"UPDATE";
+    const previousRequest=auditRaw.find((row,i)=>
+      i>0 &&
+      String(row[14]??"")===requestId &&
+      String(row[5]??"").toUpperCase()===action &&
+      String(row[8]??"")===paymentId &&
+      String(row[15]??"").toLowerCase()==="success"
+    );
     const row=paymentsRaw[rawIndex];
+    if(previousRequest) return ok({paymentId,status:String(row[10]??""),version:num(row[16]),idempotent:true},requestId);
+    const currentVersion=num(row[16]);
+    if(currentVersion!==expectedVersion) return fail("VERSION_CONFLICT","This payment changed after you opened it. Reload before correcting or voiding it.",requestId,409);
     if(norm(row[10])!=="active" && req.method!=="DELETE") return fail("INVALID_STATE","Only active payments can be corrected.",requestId,409);
-    if(norm(row[10])==="voided" && req.method==="DELETE") return ok({paymentId,status:"Voided",idempotent:true},requestId);
+    if(norm(row[10])==="voided" && req.method==="DELETE") return ok({paymentId,status:"Voided",version:currentVersion,idempotent:true},requestId);
     const feeRecordId=String(row[1]??"");
     const studentId=String(row[2]??"");
     const old={paymentDate:row[5]??"",amount:num(row[6]),method:String(row[7]??""),receiptRef:String(row[8]??""),notes:String(row[9]??""),status:String(row[10]??"")};
     const ids=await getSheetIds();
     if(typeof ids["Payments"]!=="number"||typeof ids["Audit Log"]!=="number") throw new Error("SHEET_MISSING");
     const now=new Date().toISOString();
-    const version=num(row[16])+1;
+    const version=currentVersion+1;
 
     if(req.method==="DELETE"){
       await batchUpdate([
