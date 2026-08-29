@@ -64,7 +64,7 @@ export default async (req: Request, context: Context) => {
     if (typeof ids["Attendance"] !== "number" || typeof ids["Audit Log"] !== "number") throw new Error("SHEET_MISSING");
 
     await batchUpdate([
-      { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 3 }, rows: [{ values: [userValue(status), userValue(checkIn ?? "")] }], fields: "userEnteredValue" } },
+      { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 3 }, rows: [{ values: [userValue(status), checkIn === "" ? {} : userValue(checkIn)] }], fields: "userEnteredValue" } },
       { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 6 }, rows: [{ values: [userValue(body.notes === undefined ? oldNotes : String(body.notes).trim())] }], fields: "userEnteredValue" } },
       { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 12 }, rows: [{ values: [userValue(actor.email), userValue(now), userValue(reason), userValue(version)] }], fields: "userEnteredValue" } },
       insertRowsRequest(ids["Audit Log"], auditRaw.length),
