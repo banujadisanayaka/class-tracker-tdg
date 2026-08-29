@@ -102,6 +102,18 @@ export default function HistoryPage(){
     return Array.from(map.entries());
   },[q.data?.events,mode]);
 
+  const openGroup=(group:string)=>{
+    if(mode==="yearly"){
+      setAnchor(group+"-01");
+      setMode("monthly");
+      return;
+    }
+    if(mode==="monthly"||mode==="weekly"){
+      setAnchor(group);
+      setMode("daily");
+    }
+  };
+
   return <>
     <div className="page-title"><div><h1>History Centre</h1><p>Audit-backed daily, weekly, monthly, yearly and custom activity history.</p></div></div>
 
@@ -135,10 +147,10 @@ export default function HistoryPage(){
         <button onClick={()=>window.print()}>PDF / Print</button>
       </div>
 
-      {q.data.truncated&&<div className="history-truncated">More than 1,000 events match this period. Narrow the date range to inspect the full history.</div>}
+      {q.data.truncated&&<div className="history-truncated">More than 1,000 events match this period. Use the month/day drill-down or narrow the date range to inspect the complete history.</div>}
 
       {groups.length===0?<div className="empty-card"><b>↺</b><h3>No audit events</h3><p>No permanent system events match this period and module.</p></div>:
-       groups.map(([group,events])=><section className="history-day" key={group}><h3>{mode==="yearly"?"Month "+group:group}</h3>{events.map(event=>
+       groups.map(([group,events])=><section className="history-day" key={group}><div className="history-day-heading"><h3>{mode==="yearly"?"Month "+group:group}</h3>{mode==="yearly"?<button onClick={()=>openGroup(group)}>Open month</button>:(mode==="monthly"||mode==="weekly")?<button onClick={()=>openGroup(group)}>Open day</button>:null}</div>{events.map(event=>
         <details className="history-event" key={event.id}>
           <summary>
             <time>{eventTime(event.timestamp)}</time>
