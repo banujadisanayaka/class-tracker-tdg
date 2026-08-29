@@ -80,27 +80,46 @@ export default async (req: Request, context: Context) => {
     const generatedAt = new Date().toISOString();
 
     if (type === "financial") {
-      const raw = await readRange("'Fee Tracker'!A:R", "UNFORMATTED_VALUE");
-      const rows = rowsToObjects(raw) as Record<string, unknown>[];
+      const [feeRaw, paymentRaw] = await Promise.all([
+        readRange("'Fee Tracker'!A:R", "UNFORMATTED_VALUE"),
+        readRange("Payments!A:R", "UNFORMATTED_VALUE"),
+      ]);
+      const rows = rowsToObjects(feeRaw) as Record<string, unknown>[];
+      const payments = rowsToObjects(paymentRaw) as Record<string, unknown>[];
       const keys = monthRangeKeys(range.from, range.to);
       const selected = rows.filter(r => {
         const key = monthKey(num(r["Year"]), String(r["Month"] || ""));
         return key !== null && key >= keys.first && key <= keys.last;
       });
 
-      const detail = selected.map(r => ({
-        period: String(r["Month"] || "") + " " + num(r["Year"]),
-        studentId: String(r["Student ID"] || ""),
-        studentName: String(r["Student Name (Auto)"] || ""),
-        monthlyFee: num(r["Monthly Fee (Auto)"]),
-        paid: num(r["Amount Paid (Total This Month)"]),
-        balance: num(r["Balance (Auto)"]),
-        status: String(r["Status (Auto)"] || ""),
-      }));
+      const receivedByFeeRecord = new Map<string, number>();
+      for (const payment of payments) {
+        if (norm(payment["Status"] || "Active") !== "active") continue;
+        const paymentDate = num(payment["Payment Date"]);
+        if (paymentDate < range.fromSerial || paymentDate > range.toSerial) continue;
+        const feeRecordId = String(payment["Fee Record ID"] || "");
+        if (!feeRecordId) continue;
+        receivedByFeeRecord.set(feeRecordId, (receivedByFeeRecord.get(feeRecordId) || 0) + num(payment["Amount"]));
+      }
+
+      const detail = selected.map(r => {
+        const feeRecordId = String(r["Fee Record ID"] || "");
+        return {
+          period: String(r["Month"] || "") + " " + num(r["Year"]),
+          studentId: String(r["Student ID"] || ""),
+          studentName: String(r["Student Name (Auto)"] || ""),
+          monthlyFee: num(r["Monthly Fee (Auto)"]),
+          paid: num(r["Amount Paid (Total This Month)"]),
+          balance: num(r["Balance (Auto)"]),
+          receivedInPeriod: receivedByFeeRecord.get(feeRecordId) || 0,
+          status: String(r["Status (Auto)"] || ""),
+        };
+      });
 
       const due = detail.reduce((sum, r) => sum + r.monthlyFee, 0);
       const paid = detail.reduce((sum, r) => sum + r.paid, 0);
       const balance = detail.reduce((sum, r) => sum + r.balance, 0);
+      const receivedInPeriod = detail.reduce((sum, r) => sum + r.receivedInPeriod, 0);
 
       return ok({
         type,
@@ -108,9 +127,10 @@ export default async (req: Request, context: Context) => {
         periodLabel: periodLabel(range.from, range.to),
         generatedAt,
         summary: [
-          { label: "Monthly fees", value: due, format: "money" },
-          { label: "Paid", value: paid, format: "money" },
+          { label: "Monthly fees", value: due, format: "money", detail: "Obligations for months touched by this date range" },
+          { label: "Current paid", value: paid, format: "money", detail: "All active payments currently applied to those fee records" },
           { label: "Outstanding", value: balance, format: "money" },
+          { label: "Received in selected dates", value: receivedInPeriod, format: "money", detail: "Only active transactions with a known payment date inside this range" },
           { label: "Fee records", value: detail.length, format: "number" },
         ],
         columns: [
@@ -118,12 +138,13 @@ export default async (req: Request, context: Context) => {
           { key: "studentId", label: "Student ID", format: "text" },
           { key: "studentName", label: "Student", format: "text" },
           { key: "monthlyFee", label: "Monthly Fee", format: "money" },
-          { key: "paid", label: "Paid", format: "money" },
+          { key: "paid", label: "Current Paid", format: "money" },
           { key: "balance", label: "Balance", format: "money" },
+          { key: "receivedInPeriod", label: "Received in Selected Dates", format: "money" },
           { key: "status", label: "Status", format: "text" },
         ],
         rows: detail,
-        note: "Financial totals use the authoritative monthly Fee Tracker rows for every month touched by the selected period.",
+        note: "Monthly fees, current paid and outstanding use the authoritative Fee Tracker for every month touched by the selected period. 'Received in selected dates' uses active Payment transactions whose payment date falls inside the exact selected range. Migrated payments with no known payment date remain included in Current Paid but are not assigned to an arbitrary day.",
       }, requestId);
     }
 
