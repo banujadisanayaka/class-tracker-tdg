@@ -46,9 +46,9 @@ function safeCsv(value:string){
 }
 
 function downloadCsv(events:HistoryEvent[],from:string,to:string){
-  const header=["Date","Timestamp","Module","Action","Record Type","Record ID","Student ID","Class ID","Actor","Reason","Result","Request ID"];
+  const header=["Date","Timestamp","Module","Action","Record Type","Record ID","Student ID","Class ID","Actor","Actor Role","Before","After","Reason","Result","Request ID"];
   const lines=events.map(e=>[
-    e.localDate,e.timestamp,e.module,e.action,e.recordType,e.recordId,e.studentId,e.classId,e.actorEmail||e.actorId,e.reason,e.result,e.requestId
+    e.localDate,e.timestamp,e.module,e.action,e.recordType,e.recordId,e.studentId,e.classId,e.actorEmail||e.actorId,e.actorRole,e.beforeValue,e.afterValue,e.reason,e.result,e.requestId
   ].map(safeCsv).join(","));
   const csv="\uFEFF"+[header.map(safeCsv).join(","),...lines].join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
@@ -87,7 +87,7 @@ export default function HistoryPage(){
   });
 
   const modules=useMemo(()=>{
-    const base=["Students","Attendance","Payments","Reference Data","System","Admin"];
+    const base=["Students","Attendance","Payments","Classes","Reference Data","Security","System","Admin"];
     return Array.from(new Set([...base,...(q.data?.modules||[])])).sort();
   },[q.data?.modules]);
 
@@ -138,7 +138,7 @@ export default function HistoryPage(){
       <div className="history-summary">
         <div className="stat-card"><span>Events</span><strong>{q.data.totalEvents}</strong></div>
         <div className="stat-card"><span>Successful</span><strong>{q.data.successEvents}</strong></div>
-        <div className="stat-card"><span>Failed</span><strong>{q.data.failedEvents}</strong></div>
+        <div className="stat-card"><span>Failed (logged)</span><strong>{q.data.failedEvents}</strong></div>
         <div className="stat-card"><span>Actors</span><strong>{q.data.uniqueActors}</strong></div>
       </div>
 
@@ -150,7 +150,9 @@ export default function HistoryPage(){
       {q.data.truncated&&<div className="history-truncated">More than 1,000 events match this period. Use the month/day drill-down or narrow the date range to inspect the complete history.</div>}
 
       {groups.length===0?<div className="empty-card"><b>↺</b><h3>No audit events</h3><p>No permanent system events match this period and module.</p></div>:
-       groups.map(([group,events])=><section className="history-day" key={group}><div className="history-day-heading"><h3>{mode==="yearly"?"Month "+group:group}</h3>{mode==="yearly"?<button onClick={()=>openGroup(group)}>Open month</button>:(mode==="monthly"||mode==="weekly")?<button onClick={()=>openGroup(group)}>Open day</button>:null}</div>{events.map(event=>
+       groups.map(([group,events])=><section className="history-day" key={group}>
+        <div className="history-day-heading"><h3>{mode==="yearly"?"Month "+group:group}</h3>{mode==="yearly"?<button onClick={()=>openGroup(group)}>Open month</button>:(mode==="monthly"||mode==="weekly")?<button onClick={()=>openGroup(group)}>Open day</button>:null}</div>
+        {mode==="yearly"?<div className="history-period-summary"><strong>{events.length}</strong><span> audit events in this month. Open the month to drill down by day.</span></div>:events.map(event=>
         <details className="history-event" key={event.id}>
           <summary>
             <time>{eventTime(event.timestamp)}</time>
@@ -162,6 +164,7 @@ export default function HistoryPage(){
             <div className="history-meta">
               <div><small>Record</small><strong>{event.recordId||"—"}</strong></div>
               <div><small>Actor</small><strong>{event.actorEmail||event.actorId||"—"}</strong></div>
+              <div><small>Actor role</small><strong>{event.actorRole||"—"}</strong></div>
               <div><small>Request ID</small><strong>{event.requestId||"—"}</strong></div>
               {event.studentId&&<div><small>Student</small><strong>{event.studentId}</strong></div>}
               {event.classId&&<div><small>Class</small><strong>{event.classId}</strong></div>}
