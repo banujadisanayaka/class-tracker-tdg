@@ -56,6 +56,12 @@ export default async (req: Request, context: Context) => {
     const oldStatus = String(row[3] ?? "");
     const oldCheckIn = row[4] ?? "";
     const oldNotes = String(row[6] ?? "");
+    const nextNotes = body.notes === undefined ? oldNotes : String(body.notes).trim();
+    const nextCheckIn = checkIn ?? "";
+    const sameCheckIn = String(oldCheckIn ?? "") === String(nextCheckIn ?? "");
+    if (oldStatus === status && sameCheckIn && oldNotes === nextNotes) {
+      return ok({ attendanceId, status: oldStatus, version: currentVersion, noChange: true }, requestId);
+    }
     const version = currentVersion + 1;
     const studentId = String(row[1] ?? "");
     const classId = String(row[10] ?? "");
@@ -65,11 +71,11 @@ export default async (req: Request, context: Context) => {
 
     await batchUpdate([
       { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 3 }, rows: [{ values: [userValue(status), checkIn === "" ? {} : userValue(checkIn)] }], fields: "userEnteredValue" } },
-      { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 6 }, rows: [{ values: [userValue(body.notes === undefined ? oldNotes : String(body.notes).trim())] }], fields: "userEnteredValue" } },
+      { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 6 }, rows: [{ values: [userValue(nextNotes)] }], fields: "userEnteredValue" } },
       { updateCells: { start: { sheetId: ids["Attendance"], rowIndex: rawIndex, columnIndex: 12 }, rows: [{ values: [userValue(actor.email), userValue(now), userValue(reason), userValue(version)] }], fields: "userEnteredValue" } },
       insertRowsRequest(ids["Audit Log"], auditRaw.length),
       { updateCells: { start: { sheetId: ids["Audit Log"], rowIndex: auditRaw.length, columnIndex: 0 }, rows: [{ values: [
-        userValue(shortId("AUD")), userValue(now), userValue(actor.email), userValue(actor.email), userValue(actor.role), userValue("UPDATE"), userValue("Attendance"), userValue("Attendance"), userValue(attendanceId), userValue(studentId), userValue(classId), userValue(JSON.stringify({ status: oldStatus, checkIn: oldCheckIn, notes: oldNotes })), userValue(JSON.stringify({ status, checkIn: checkIn ?? "", notes: body.notes === undefined ? oldNotes : String(body.notes).trim() })), userValue(reason), userValue(requestId), userValue("Success"),
+        userValue(shortId("AUD")), userValue(now), userValue(actor.email), userValue(actor.email), userValue(actor.role), userValue("UPDATE"), userValue("Attendance"), userValue("Attendance"), userValue(attendanceId), userValue(studentId), userValue(classId), userValue(JSON.stringify({ status: oldStatus, checkIn: oldCheckIn, notes: oldNotes })), userValue(JSON.stringify({ status, checkIn: nextCheckIn, notes: nextNotes })), userValue(reason), userValue(requestId), userValue("Success"),
       ] }], fields: "userEnteredValue" } },
     ]);
     return ok({ attendanceId, status, version }, requestId);
