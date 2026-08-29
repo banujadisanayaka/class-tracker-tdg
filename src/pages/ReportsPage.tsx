@@ -60,15 +60,15 @@ function exportCsv(data:ReportPayload){
   downloadBlob(new Blob([csv],{type:"text/csv;charset=utf-8"}),filenameFor(data,"csv"));
 }
 
-function exportImage(data:ReportPayload){
+function createReportImageBlob(data:ReportPayload){
   const width=1400;
   const rowCount=Math.min(data.rows.length,16);
-  const height=390+rowCount*42;
+  const height=445+rowCount*42;
   const canvas=document.createElement("canvas");
   canvas.width=width;
   canvas.height=height;
   const ctx=canvas.getContext("2d");
-  if(!ctx) return;
+  if(!ctx) return Promise.resolve<Blob|null>(null);
 
   ctx.fillStyle="#ffffff";
   ctx.fillRect(0,0,width,height);
@@ -101,15 +101,15 @@ function exportImage(data:ReportPayload){
   ctx.fillRect(70,y-28,1240,38);
   ctx.fillStyle="#435d73";
   ctx.font="700 16px system-ui";
-  cols.forEach((c,i)=>ctx.fillText(c.label,78+i*colWidth,y-3));
+  cols.forEach((col,i)=>ctx.fillText(col.label,78+i*colWidth,y-3));
   ctx.font="15px system-ui";
   data.rows.slice(0,rowCount).forEach(row=>{
     y+=42;
     ctx.fillStyle="#e8edf1";
     ctx.fillRect(70,y+7,1240,1);
     ctx.fillStyle="#30495f";
-    cols.forEach((c,i)=>{
-      const raw=formatValue(row[c.key]??"",c.format);
+    cols.forEach((col,i)=>{
+      const raw=formatValue(row[col.key]??"",col.format);
       const text=raw.length>26?raw.slice(0,25)+"…":raw;
       ctx.fillText(text,78+i*colWidth,y);
     });
@@ -117,10 +117,19 @@ function exportImage(data:ReportPayload){
   if(data.rows.length>rowCount){
     y+=42;
     ctx.fillStyle="#758696";
-    ctx.fillText("Image preview includes first "+rowCount+" of "+data.rows.length+" rows. CSV/PDF includes the full report.",78,y);
+    ctx.fillText("Image includes first "+rowCount+" of "+data.rows.length+" rows. CSV/PDF contains the complete report.",78,y);
   }
 
-  canvas.toBlob(blob=>{if(blob) downloadBlob(blob,filenameFor(data,"png"));},"image/png");
+  ctx.fillStyle="#8a98a7";
+  ctx.font="16px system-ui";
+  ctx.fillText("Class Tracker • Google Sheets source of truth • "+data.rows.length+" report rows",70,height-35);
+
+  return new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/png"));
+}
+
+async function exportImage(data:ReportPayload){
+  const blob=await createReportImageBlob(data);
+  if(blob) downloadBlob(blob,filenameFor(data,"png"));
 }
 
 export default function ReportsPage(){
@@ -145,7 +154,12 @@ export default function ReportsPage(){
   const share=async()=>{
     if(!data) return;
     try{
-      if(navigator.share){
+      const blob=await createReportImageBlob(data);
+      const file=blob?new File([blob],filenameFor(data,"png"),{type:"image/png"}):null;
+      if(file&&navigator.share&&navigator.canShare?.({files:[file]})){
+        await navigator.share({title:data.title,text:exportSummary,files:[file]});
+        setNotice("Report image shared.");
+      }else if(navigator.share){
         await navigator.share({title:data.title,text:exportSummary});
         setNotice("Report shared.");
       }else if(navigator.clipboard){
