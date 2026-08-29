@@ -24,7 +24,7 @@ function timeString(v: unknown) {
 }
 
 interface AttendanceEntry { studentId?: string; status?: string; checkInTime?: string; notes?: string; }
-interface AttendanceBody { classId?: string; date?: string; entries?: AttendanceEntry[]; }
+interface AttendanceBody { classId?: string; date?: string; allowOffSchedule?: boolean; entries?: AttendanceEntry[]; }
 
 export default async (req: Request, context: Context) => {
   const requestId = req.headers.get("x-request-id") || context.requestId;
@@ -121,6 +121,18 @@ export default async (req: Request, context: Context) => {
     const klass = classes.find(c => String(c["Class ID"]) === classId && norm(c["Status"]) === "active");
     if (!klass) return fail("VALIDATION_ERROR", "The selected class is invalid or inactive.", requestId, 422);
 
+    const defaultDay = String(klass["Default Day"] || "").trim();
+    const dateWeekday = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(new Date(date + "T00:00:00Z"));
+    const offSchedule = !!defaultDay && norm(defaultDay) !== norm(dateWeekday);
+    if (offSchedule && body.allowOffSchedule !== true) {
+      return fail(
+        "OFF_SCHEDULE_CONFIRMATION_REQUIRED",
+        `This class is normally on ${defaultDay}, but ${date} is ${dateWeekday}. Confirm this is a special/rescheduled class before saving attendance.`,
+        requestId,
+        409,
+      );
+    }
+
     const studentMap = new Map(students.map(s => [String(s["Student ID"]), s]));
     const validEnrollment = new Set(enrollments.filter(e => {
       if (String(e["Class ID"]) !== classId || norm(e["Status"]) !== "active") return false;
@@ -153,7 +165,7 @@ export default async (req: Request, context: Context) => {
     if (!existingSession) {
       requests.push(insertRowsRequest(ids["Class Sessions"], sessionsRaw.length));
       requests.push({ updateCells: { start: { sheetId: ids["Class Sessions"], rowIndex: sessionsRaw.length, columnIndex: 0 }, rows: [{ values: [
-        userValue(sessionId), userValue(classId), userValue(dateSerial), {}, {}, userValue("Completed"), userValue("Created automatically when attendance was saved."), userValue(now), userValue(actor.email), userValue(now), userValue(actor.email), userValue(1),
+        userValue(sessionId), userValue(classId), userValue(dateSerial), {}, {}, userValue("Completed"), userValue(offSchedule ? `Special/rescheduled session confirmed for ${dateWeekday}; normal class day is ${defaultDay}.` : "Created automatically when attendance was saved."), userValue(now), userValue(actor.email), userValue(now), userValue(actor.email), userValue(1),
       ] }], fields: "userEnteredValue" } });
     }
 
@@ -164,14 +176,14 @@ export default async (req: Request, context: Context) => {
       const sid = String(e.studentId);
       const attId = `ATT-${date.replace(/-/g, "")}-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
       return { values: [
-        userValue(dateSerial), userValue(sid), userValue(`=IF(B${rowNumber}="","",IFERROR(VLOOKUP(B${rowNumber},Students!$A:$B,2,FALSE),"Unknown"))`), userValue(String(e.status)), userValue(timeFraction(e.checkInTime) ?? ""), userValue(className), userValue(String(e.notes || "").trim()), userValue(actor.email), userValue(attId), userValue(sessionId), userValue(classId), userValue(now), {}, {}, {}, userValue(1), userValue("Active"),
+        userValue(dateSerial), userValue(sid), userValue(`=IF(B${rowNumber}="","",IFERROR(VLOOKUP(B${rowNumber},Students!$A:$B,2,FALSE),"Unknown"))`), userValue(String(e.status)), timeFraction(e.checkInTime) === "" ? {} : userValue(timeFraction(e.checkInTime)), userValue(className), userValue(String(e.notes || "").trim()), userValue(actor.email), userValue(attId), userValue(sessionId), userValue(classId), userValue(now), {}, {}, {}, userValue(1), userValue("Active"),
       ] };
     });
     requests.push(insertRowsRequest(ids["Attendance"], firstRowIndex, attendanceRows.length));
     requests.push({ updateCells: { start: { sheetId: ids["Attendance"], rowIndex: firstRowIndex, columnIndex: 0 }, rows: attendanceRows, fields: "userEnteredValue" } });
     requests.push(insertRowsRequest(ids["Audit Log"], auditRaw.length));
     requests.push({ updateCells: { start: { sheetId: ids["Audit Log"], rowIndex: auditRaw.length, columnIndex: 0 }, rows: [{ values: [
-      userValue(shortId("AUD")), userValue(now), userValue(actor.email), userValue(actor.email), userValue(actor.role), userValue("CREATE_BATCH"), userValue("Attendance"), userValue("Attendance Batch"), userValue(sessionId), {}, userValue(classId), {}, userValue(JSON.stringify({ date, count: entries.length, students: entries.map(e => e.studentId) })), userValue("Attendance saved from website"), userValue(requestId), userValue("Success"),
+      userValue(shortId("AUD")), userValue(now), userValue(actor.email), userValue(actor.email), userValue(actor.role), userValue("CREATE_BATCH"), userValue("Attendance"), userValue("Attendance Batch"), userValue(sessionId), {}, userValue(classId), {}, userValue(JSON.stringify({ date, count: entries.length, students: entries.map(e => e.studentId), offSchedule, defaultDay: defaultDay || null, dateWeekday })), userValue("Attendance saved from website"), userValue(requestId), userValue("Success"),
     ] }], fields: "userEnteredValue" } });
 
     await batchUpdate(requests);
