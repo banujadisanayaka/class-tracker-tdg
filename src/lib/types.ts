@@ -13,3 +13,11 @@ export interface PaymentInput { studentId:string;year:number;month:string;paymen
 export interface PaymentRecord { id:string;feeRecordId:string;studentId:string;year:number;month:string;paymentDate:string;amount:number;paymentMethod:string;receiptRef:string;notes:string;status:string;recordedBy:string;recordedAt:string;updatedBy:string;updatedAt:string;correctionReason:string;version:number;requestId:string; }
 export interface PaymentCorrectionInput { amount:number;paymentDate:string;paymentMethod:string;receiptRef?:string;notes?:string;reason:string;expectedVersion:number; }
 export interface ApiEnvelope<T>{success:boolean;requestId:string;data?:T;error?:{code:string;message:string};}
+
+export type ReportValue = string | number | boolean | null;
+export type ReportFormat = "text" | "money" | "number" | "percent" | "date";
+export interface ReportSummaryItem { label:string; value:string|number; format:ReportFormat; detail?:string; }
+export interface ReportColumn { key:string; label:string; format:ReportFormat; }
+export interface ReportPayload { type:"financial"|"attendance"|"students"|"classes"|"staff"; title:string; periodLabel:string; generatedAt:string; summary:ReportSummaryItem[]; columns:ReportColumn[]; rows:Array<Record<string,ReportValue>>; note?:string; }
+export interface HistoryEvent { id:string;timestamp:string;localDate:string;actorId:string;actorEmail:string;actorRole:string;action:string;module:string;recordType:string;recordId:string;studentId:string;classId:string;beforeValue:string;afterValue:string;reason:string;requestId:string;result:string; }
+export interface HistoryPayload { from:string;to:string;generatedAt:string;totalEvents:number;successEvents:number;failedEvents:number;uniqueActors:number;modules:string[];truncated:boolean;events:HistoryEvent[]; }

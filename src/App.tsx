@@ -7,6 +7,8 @@ import StudentFormModal from "./components/StudentFormModal";
 import AttendancePage from "./pages/AttendancePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import TodayPage from "./pages/TodayPage";
+import Reports from "./pages/ReportsPage";
+import History from "./pages/HistoryPage";
 
 const nav = [
   ["/dashboard", "Home", "⌂"],
@@ -96,8 +98,6 @@ function Students(){
  </>
 }
 
-function Reports(){return <><PageTitle title="Reports" subtitle="Financial, attendance, student, class and staff reports"/><div className="report-menu">{["Financial Reports","Attendance Reports","Student Reports","Class Reports","Staff Reports"].map(x=><button key={x}><b>▥</b><span>{x}</span><i>PDF · Excel · Image · Share</i></button>)}</div></>}
-function History(){return <><PageTitle title="History Centre" subtitle="Daily, weekly, monthly, yearly and custom activity history"/><div className="period-tabs"><button className="active">Daily</button><button>Weekly</button><button>Monthly</button><button>Yearly</button><button>Custom</button></div><div className="empty-card"><b>↺</b><h3>Audit-backed history</h3><p>Student, attendance, payment, staff and system events will be generated from the permanent Audit Log and transaction tables.</p></div></>}
 function More(){return <><PageTitle title="More" subtitle="Management and administration"/><div className="more-grid">{[["Payments","/payments"],["Reports","/reports"],["History","/history"],["Admin Portal","/admin"]].map(([l,p])=><NavLink to={p} key={p}><strong>{l}</strong><span>Open →</span></NavLink>)}</div></>}
 function Admin(){return <><PageTitle title="Admin Portal" subtitle="Full management, access, settings and system health"/><div className="admin-grid">{["Classes","Staff & Access","Pending Access Requests","Permissions","System Health","Audit Log","Lists & Dropdowns","Settings","Help Centre","Master Google Sheet"].map(x=><button key={x}><strong>{x}</strong><span>Manage →</span></button>)}</div><div className="setup-note"><b>Development configuration</b><p>The site will refuse live Sheet operations until the Netlify server has valid Google service-account credentials. This is intentional—there is no silent fallback database.</p></div></>}
 
