@@ -14,6 +14,7 @@ function timeFraction(v: string | undefined) {
   return (h * 60 + min) / 1440;
 }
 function timeString(v: unknown) {
+  if (v === "" || v === null || v === undefined) return "";
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0 || n >= 1) return "";
   const total = Math.round(n * 1440);
