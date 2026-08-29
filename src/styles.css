@@ -21,3 +21,12 @@
 .history-day-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px}.history-day-heading h3{margin:0;color:#38546e;font-size:13px}.history-day-heading button{min-height:34px;border:1px solid #d7e1e8;background:#fff;color:#23435f;border-radius:8px;padding:0 10px;font-size:10px;font-weight:800;cursor:pointer}
 @media(max-width:720px){.history-day-heading button{min-height:36px}}
 @media print{.history-day-heading button{display:none!important}}
+
+@media print{
+  @page{size:A4;margin:12mm}
+  html,body{background:#fff!important;color:#111!important}
+  .report-print,.history-day,.history-event,.stat-card{break-inside:avoid}
+  .history-event:not([open])>.history-event-body{display:block!important}
+  .history-event summary{break-after:avoid}
+  .history-event-body{background:#fff!important}
+}
