@@ -174,7 +174,7 @@ export default function ReportsPage(){
   };
 
   return <>
-    <div className="page-title"><div><h1>Reports Centre</h1><p>Live reports generated from the Google Sheets source of truth.</p></div></div>
+    <div className="page-title print-hide"><div><h1>Reports Centre</h1><p>Live reports generated from the Google Sheets source of truth.</p></div></div>
 
     <div className="report-type-tabs">
       {REPORTS.map(r=><button key={r.id} className={type===r.id?"active":""} onClick={()=>setType(r.id)}>{r.label}</button>)}
@@ -192,7 +192,7 @@ export default function ReportsPage(){
     {q.isLoading?<div className="state-card"><div className="spinner"/><strong>Generating report from Google Sheets…</strong></div>:
      q.isError?<div className="state-card error-state"><b>!</b><strong>Report could not be generated.</strong><span>{(q.error as Error).message}</span></div>:
      data?<section className="report-print">
-      <div className="page-title"><div><h2>{data.title}</h2><p>{data.periodLabel}</p></div></div>
+      <div className="page-title"><div><h2>{data.title}</h2><p>{data.periodLabel}</p><small className="report-generated">Generated {new Date(data.generatedAt).toLocaleString("en-LK")} · Google Sheets source of truth</small></div></div>
 
       <div className="report-summary">
         {data.summary.map(item=><div className="stat-card" key={item.label}><span>{item.label}</span><strong>{formatValue(item.value,item.format)}</strong>{item.detail&&<small>{item.detail}</small>}</div>)}
