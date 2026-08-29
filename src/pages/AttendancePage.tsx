@@ -16,19 +16,23 @@ export default function AttendancePage(){
  const [error,setError]=useState("");
  const [editTarget,setEditTarget]=useState<AttendanceRecord|null>(null);
  const [edit,setEdit]=useState({status:"Present",checkInTime:"",notes:"",reason:""});
+ const [allowOffSchedule,setAllowOffSchedule]=useState(false);
 
  const students=useQuery({queryKey:["class-students",classId,date],queryFn:()=>api.classStudents(classId,date),enabled:!!classId});
  const records=useQuery({queryKey:["attendance-records",classId,date],queryFn:()=>api.attendanceRecords({classId,date}),enabled:!!classId});
- useEffect(()=>{setMarked({});setNotice("");setError("");setEditTarget(null);},[classId,date]);
+ useEffect(()=>{setMarked({});setNotice("");setError("");setEditTarget(null);setAllowOffSchedule(false);},[classId,date]);
  useEffect(()=>{const active=(records.data||[]).filter(r=>r.recordStatus.toLowerCase()!=="voided");if(active.length)setMarked(Object.fromEntries(active.map(r=>[r.studentId,r.status])));},[records.data]);
 
  const activeClasses=useMemo(()=>classes.data?.filter(c=>c.status.toLowerCase()==="active")||[],[classes.data]);
+ const selectedClass=activeClasses.find(c=>c.id===classId);
+ const dateWeekday=date?new Intl.DateTimeFormat("en-US",{weekday:"long",timeZone:"UTC"}).format(new Date(date+"T00:00:00Z")):"";
+ const offSchedule=!!selectedClass?.day&&selectedClass.day.toLowerCase()!==dateWeekday.toLowerCase();
  const activeSaved=useMemo(()=>(records.data||[]).filter(r=>r.recordStatus.toLowerCase()!=="voided"),[records.data]);
  const alreadySaved=activeSaved.length>0;
  const complete=students.data?.length?students.data.every(s=>!!marked[s.id]):false;
 
  const save=useMutation({
-  mutationFn:()=>api.saveAttendance({classId,date,entries:(students.data||[]).map(s=>({studentId:s.id,status:marked[s.id]}))}),
+  mutationFn:()=>api.saveAttendance({classId,date,allowOffSchedule,entries:(students.data||[]).map(s=>({studentId:s.id,status:marked[s.id]}))}),
   onSuccess:async r=>{setNotice("Attendance saved for "+r.saved+" students.");await Promise.all([qc.invalidateQueries({queryKey:["dashboard"]}),qc.invalidateQueries({queryKey:["attendance-records",classId,date]})]);},
   onError:e=>setError((e as Error).message)
  });
@@ -45,12 +49,13 @@ export default function AttendancePage(){
   {notice&&<div className="success-banner">✓ {notice}</div>}{error&&<div className="form-error page-error"><b>!</b><span>{error}</span></div>}
   <div className="attendance-controls"><label>Class<select value={classId} onChange={e=>setClassId(e.target.value)}><option value="">Select class…</option>{activeClasses.map(c=><option key={c.id} value={c.id}>{c.name+(c.day?" — "+c.day:"")}</option>)}</select></label><label>Date<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label></div>
 
+  {offSchedule&&<div className="warning-banner"><b>Off-schedule date selected.</b><span>{selectedClass?.name} is normally on {selectedClass?.day}, but {date} is {dateWeekday}.</span>{!alreadySaved&&<label style={{display:"flex",alignItems:"center",gap:8,marginTop:8,fontWeight:700}}><input type="checkbox" checked={allowOffSchedule} onChange={e=>setAllowOffSchedule(e.target.checked)}/> This is a special/rescheduled class — allow attendance on this date.</label>}</div>}
   {alreadySaved&&<div className="warning-banner"><b>Attendance already saved for this class and date.</b><span>Use Correct Attendance below instead of creating a second record.</span></div>}
 
   {!classId?<div className="empty-card"><b>✓</b><h3>Select a class</h3><p>Choose the class and date to load active enrolled students.</p></div>:students.isLoading?<div className="state-card"><div className="spinner"/><strong>Loading class students…</strong></div>:students.isError?<div className="state-card error-state"><b>!</b><strong>Class students could not be loaded.</strong><span>{(students.error as Error).message}</span></div>:(students.data?.length||0)===0?<div className="empty-card"><b>◎</b><h3>No active students</h3><p>This class has no active enrollments.</p></div>:<>
    <div className="attendance-toolbar"><div><strong>{students.data?.length} students</strong><span>{Object.keys(marked).length} marked</span></div><button className="secondary-button" disabled={alreadySaved} onClick={markAll}>✓ Mark All Present</button></div>
    <div className="attendance-list">{students.data?.map(s=><article className="attendance-row" key={s.id}><div><strong>{s.name}</strong><span>{s.id}</span></div><div className="attendance-actions">{statuses.map(st=><button disabled={alreadySaved} key={st} className={marked[s.id]===st?"att-"+st.toLowerCase()+" selected":"att-"+st.toLowerCase()} onClick={()=>setMarked(v=>({...v,[s.id]:st}))}>{st}</button>)}</div></article>)}</div>
-   <div className="sticky-save"><div><strong>{Object.keys(marked).length} / {students.data?.length} marked</strong><span>{alreadySaved?"Already saved — use Correct Attendance below":complete?"Ready to save":"Mark every student before saving"}</span></div><button className="primary-button" disabled={!complete||save.isPending||alreadySaved} onClick={()=>{setError("");save.mutate();}}>{save.isPending?"Saving to Google Sheet…":alreadySaved?"Attendance Already Saved":"Save Attendance"}</button></div>
+   <div className="sticky-save"><div><strong>{Object.keys(marked).length} / {students.data?.length} marked</strong><span>{alreadySaved?"Already saved — use Correct Attendance below":offSchedule&&!allowOffSchedule?"Confirm this special/rescheduled class before saving":complete?"Ready to save":"Mark every student before saving"}</span></div><button className="primary-button" disabled={!complete||save.isPending||alreadySaved||(offSchedule&&!allowOffSchedule)} onClick={()=>{setError("");save.mutate();}}>{save.isPending?"Saving to Google Sheet…":alreadySaved?"Attendance Already Saved":"Save Attendance"}</button></div>
   </>}
 
   {classId&&<section className="history-section">
