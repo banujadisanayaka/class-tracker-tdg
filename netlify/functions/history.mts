@@ -53,7 +53,7 @@ export default async (req: Request, context: Context) => {
   try {
     const raw = await readRange("'Audit Log'!A:P", "FORMATTED_VALUE");
     const rows = rowsToObjects(raw) as Record<string, unknown>[];
-    const filtered = rows
+    const dateFiltered = rows
       .map(r => ({
         id: String(r["Audit ID"] || ""),
         timestamp: String(r["Timestamp"] || ""),
@@ -73,13 +73,20 @@ export default async (req: Request, context: Context) => {
         requestId: String(r["Request ID"] || ""),
         result: String(r["Result"] || ""),
       }))
-      .filter(r => r.localDate >= from && r.localDate <= to)
+      .filter(r => r.localDate >= from && r.localDate <= to);
+
+    const modules = Array.from(new Set(dateFiltered.map(r => r.module).filter(Boolean))).sort();
+    const filtered = dateFiltered
       .filter(r => !moduleFilter || norm(r.module) === norm(moduleFilter))
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      .sort((a, b) => {
+        const bt = Date.parse(b.timestamp);
+        const at = Date.parse(a.timestamp);
+        if (Number.isFinite(bt) && Number.isFinite(at)) return bt - at;
+        return b.timestamp.localeCompare(a.timestamp);
+      });
 
     const limit = 1000;
     const events = filtered.slice(0, limit);
-    const modules = Array.from(new Set(filtered.map(r => r.module).filter(Boolean))).sort();
     const actors = Array.from(new Set(filtered.map(r => r.actorEmail || r.actorId).filter(Boolean)));
 
     return ok({
