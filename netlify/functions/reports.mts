@@ -229,21 +229,26 @@ export default async (req: Request, context: Context) => {
 
       const detail = classes.map(c => {
         const classId = String(c["Class ID"] || "");
-        const overlapping = enrollments.filter(e => {
-          if (String(e["Class ID"] || "") !== classId) return false;
-          const from = num(e["Enrolled From"]);
-          const until = num(e["Enrolled Until"]);
-          return (from <= 0 || from <= range.toSerial) && (until <= 0 || until >= range.fromSerial);
-        }).length;
+        const overlappingStudentIds = new Set(
+          enrollments
+            .filter(e => {
+              if (String(e["Class ID"] || "") !== classId) return false;
+              const from = num(e["Enrolled From"]);
+              const until = num(e["Enrolled Until"]);
+              return (from <= 0 || from <= range.toSerial) && (until <= 0 || until >= range.fromSerial);
+            })
+            .map(e => String(e["Student ID"] || ""))
+            .filter(Boolean),
+        );
         return {
           classId,
           className: String(c["Class Name"] || ""),
           subject: String(c["Subject"] || ""),
-          grade: String(c["Grade / Level"] || ""),
+          grade: String(c["Grade"] || c["Grade / Level"] || ""),
           day: String(c["Default Day"] || ""),
           time: [String(c["Start Time"] || ""), String(c["End Time"] || "")].filter(Boolean).join(" - "),
           teacher: String(c["Teacher"] || ""),
-          students: overlapping,
+          students: overlappingStudentIds.size,
           status: String(c["Status"] || ""),
         };
       });
@@ -256,7 +261,7 @@ export default async (req: Request, context: Context) => {
         summary: [
           { label: "Classes", value: detail.length, format: "number" },
           { label: "Active classes", value: detail.filter(r => norm(r.status) === "active").length, format: "number" },
-          { label: "Enrollment links", value: detail.reduce((sum, r) => sum + r.students, 0), format: "number" },
+          { label: "Student-class links", value: detail.reduce((sum, r) => sum + r.students, 0), format: "number" },
         ],
         columns: [
           { key: "classId", label: "Class ID", format: "text" },
@@ -270,7 +275,7 @@ export default async (req: Request, context: Context) => {
           { key: "status", label: "Status", format: "text" },
         ],
         rows: detail,
-        note: "Student counts show enrollment records overlapping the selected period.",
+        note: "Student counts show unique students whose enrollment periods overlap the selected date range.",
       }, requestId);
     }
 
@@ -278,7 +283,7 @@ export default async (req: Request, context: Context) => {
     const rows = rowsToObjects(raw) as Record<string, unknown>[];
     const detail = rows.map(r => ({
       userId: String(r["User ID"] || ""),
-      email: String(r["Email"] || ""),
+      email: String(r["Google Email"] || r["Email"] || ""),
       displayName: String(r["Display Name"] || ""),
       role: String(r["Role"] || ""),
       status: String(r["Account Status"] || ""),
