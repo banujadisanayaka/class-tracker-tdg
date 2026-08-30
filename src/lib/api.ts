@@ -1,4 +1,4 @@
-import type { ApiEnvelope, AttendanceCorrectionInput, AttendanceRecord, AttendanceSaveInput, ClassItem, ClassStudent, DashboardData, HistoryPayload, PaymentCorrectionInput, PaymentInput, PaymentRecord, ReferenceOption, ReportPayload, Student, StudentCreateInput, TodayData } from "./types";
+import type { ApiEnvelope, AttendanceCorrectionInput, AttendanceRecord, AttendanceSaveInput, ClassItem, ClassStudent, DashboardData, HistoryPayload, PaymentCorrectionInput, PaymentInput, PaymentRecord, ReferenceOption, ReportPayload, Student, StudentCreateInput, StudentDetailPayload, StudentUpdateInput, TodayData } from "./types";
 export class ApiError extends Error{constructor(public code:string,message:string,public status:number){super(message);this.name="ApiError";}}
 function requestId(){return crypto.randomUUID();}
 async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch(path,{...init,headers:{"Content-Type":"application/json",...(init?.headers||{})}});const body=(await response.json()) as ApiEnvelope<T>;if(!response.ok||!body.success||body.data===undefined)throw new ApiError(body.error?.code||"REQUEST_FAILED",body.error?.message||"The server could not complete the request.",response.status);return body.data;}
@@ -11,6 +11,8 @@ export const api={
  reference:(type:string)=>request<ReferenceOption[]>(`/api/reference/${encodeURIComponent(type)}`),
  addReference:(type:string,value:string)=>request<{id:string;value:string;existing:boolean}>(`/api/reference/${encodeURIComponent(type)}`,{method:"POST",headers:{"x-request-id":requestId()},body:JSON.stringify({value})}),
  createStudent:(input:StudentCreateInput)=>request<{id:string;name:string;status:string;classIds:string[]}>("/api/students",{method:"POST",headers:{"x-request-id":requestId()},body:JSON.stringify(input)}),
+ student:(id:string)=>request<StudentDetailPayload>(`/api/students/${encodeURIComponent(id)}`),
+ updateStudent:(id:string,input:StudentUpdateInput)=>request<{id:string;status:string;version:number;classIds?:string[];idempotent?:boolean}>(`/api/students/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"x-request-id":requestId()},body:JSON.stringify(input)}),
  attendanceRecords:(filters:{classId:string;date:string})=>request<AttendanceRecord[]>(`/api/attendance?classId=${encodeURIComponent(filters.classId)}&date=${encodeURIComponent(filters.date)}`),
  saveAttendance:(input:AttendanceSaveInput)=>request<{sessionId:string;classId:string;date:string;saved:number}>("/api/attendance",{method:"POST",headers:{"x-request-id":requestId()},body:JSON.stringify(input)}),
  correctAttendance:(id:string,input:AttendanceCorrectionInput)=>request<{attendanceId:string;status:string;version:number;idempotent?:boolean}>(`/api/attendance/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"x-request-id":requestId()},body:JSON.stringify(input)}),
