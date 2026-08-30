@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import type { DashboardData } from "./lib/types";
 import StudentFormModal from "./components/StudentFormModal";
+import StudentProfileModal from "./components/StudentProfileModal";
 import AttendancePage from "./pages/AttendancePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import TodayPage from "./pages/TodayPage";
@@ -86,6 +87,7 @@ function Dashboard() {
 function Students(){
  const q=useQuery({queryKey:["students"],queryFn:api.students});
  const [showAdd,setShowAdd]=useState(false);
+ const [selectedId,setSelectedId]=useState("");
  const [notice,setNotice]=useState("");
  const [search,setSearch]=useState("");
  const [status,setStatus]=useState("All");
@@ -93,8 +95,9 @@ function Students(){
  return <><PageTitle title="Students" subtitle="Search and view the complete student register" action={<button className="primary-button" onClick={()=>setShowAdd(true)}>+ Add Student</button>}/>
  {notice&&<div className="success-banner">✓ {notice}</div>}
  <div className="toolbar"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name, Student ID, phone or parent phone"/><select value={status} onChange={e=>setStatus(e.target.value)}><option>All</option><option>Active</option><option>Inactive</option><option>Left</option><option>Archived</option></select></div>
- {q.isLoading?<LoadingState label="Loading students..."/>:q.isError?<ErrorState message={(q.error as Error).message}/>:visible.length?<div className="card-list">{visible.map(s=><article className="student-card" key={s.id}><div className="student-avatar">{s.name?.slice(0,1).toUpperCase()||"S"}</div><div className="student-main"><strong>{s.name}</strong><span>{s.id}</span><small>{s.phone||"No student phone"}</small></div><span className={`status ${s.status.toLowerCase()}`}>{s.status}</span><button className="secondary-button">View</button></article>)}</div>:<div className="empty-card"><b>◎</b><h3>No matching students</h3><p>Change the search or filters, or add a new student.</p></div>}
+ {q.isLoading?<LoadingState label="Loading students..."/>:q.isError?<ErrorState message={(q.error as Error).message}/>:visible.length?<div className="card-list">{visible.map(s=><article className="student-card" key={s.id}><div className="student-avatar">{s.name?.slice(0,1).toUpperCase()||"S"}</div><div className="student-main"><strong>{s.name}</strong><span>{s.id}</span><small>{s.phone||"No student phone"}</small></div><span className={`status ${s.status.toLowerCase()}`}>{s.status}</span><button className="secondary-button" onClick={()=>setSelectedId(s.id)}>View</button></article>)}</div>:<div className="empty-card"><b>◎</b><h3>No matching students</h3><p>Change the search or filters, or add a new student.</p></div>}
  {showAdd&&<StudentFormModal onClose={()=>setShowAdd(false)} onSaved={id=>{setShowAdd(false);setNotice(`Student ${id} was saved to Google Sheets.`);}}/>}
+ {selectedId&&<StudentProfileModal studentId={selectedId} onClose={()=>setSelectedId("")} onUpdated={message=>setNotice(message)}/>} 
  </>
 }
 
