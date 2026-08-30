@@ -5,6 +5,13 @@ export interface ClassItem { id:string;name:string;subject:string;grade:string;d
 export interface ClassStudent { id:string;name:string;phone:string;status:string; }
 export interface TodayData { weekday:string;classes:Array<ClassItem & {studentCount:number}>; }
 export interface ReferenceOption { id:string;value:string;adminEditable:boolean; }
+export interface StudentProfileStudent extends Student { primaryClass:string; createdAt:string; createdBy:string; updatedAt:string; updatedBy:string; version:number; }
+export interface StudentEnrollment { id:string; classId:string; className:string; subject:string; grade:string; day:string; enrolledFrom:string; enrolledUntil:string; status:string; notes:string; version:number; }
+export interface StudentProfileAttendance { id:string; date:string; status:string; checkInTime:string; className:string; classId:string; notes:string; recordStatus:string; updatedAt:string; }
+export interface StudentProfilePayment { id:string; year:number; month:string; paymentDate:string; amount:number; paymentMethod:string; receiptRef:string; notes:string; status:string; updatedAt:string; }
+export interface StudentProfileHistory { id:string; timestamp:string; actorEmail:string; actorRole:string; action:string; module:string; recordType:string; recordId:string; beforeValue:string; afterValue:string; reason:string; result:string; }
+export interface StudentDetailPayload { student:StudentProfileStudent; enrollments:StudentEnrollment[]; recentAttendance:StudentProfileAttendance[]; recentPayments:StudentProfilePayment[]; history:StudentProfileHistory[]; summary:{activeEnrollments:number;attendanceRecords:number;attendanceRate:number;totalPaid:number}; }
+export interface StudentUpdateInput { name:string;birthday?:string;admitDate:string;phone?:string;whatsapp?:string;guardianName?:string;relationship?:string;guardianPhone?:string;guardianWhatsapp?:string;address?:string;startingFee:number;notes?:string;status:string;classIds:string[];reason:string;expectedVersion:number; }
 export interface StudentCreateInput { name:string;birthday?:string;admitDate:string;phone?:string;whatsapp?:string;guardianName?:string;relationship?:string;guardianPhone?:string;guardianWhatsapp?:string;address?:string;startingFee:number;notes?:string;classIds:string[];forceDuplicate?:boolean; }
 export interface AttendanceSaveInput { classId:string;date:string;allowOffSchedule?:boolean;entries:Array<{studentId:string;status:string;checkInTime?:string;notes?:string}>; }
 export interface AttendanceRecord { id:string;date:string;studentId:string;studentName:string;status:string;checkInTime:string;className:string;classId:string;notes:string;sessionId:string;version:number;recordStatus:string;updatedAt:string; }
