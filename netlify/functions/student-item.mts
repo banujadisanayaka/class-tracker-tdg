@@ -67,7 +67,7 @@ function studentFromRow(r: Record<string, unknown>) {
     createdBy: String(r["Created By"] || ""),
     updatedAt: String(r["Updated At"] || ""),
     updatedBy: String(r["Updated By"] || ""),
-    version: num(r["Version"]),
+    version: Math.max(1, num(r["Version"])),
   };
 }
 
@@ -205,7 +205,7 @@ export default async (req: Request, context: Context) => {
     const rawIndex = studentsRaw.findIndex((row, index) => index > 0 && String(row[0] ?? "") === studentId);
     if (rawIndex < 1) return fail("NOT_FOUND", "Student record not found.", requestId, 404);
     const currentRow = studentsRaw[rawIndex];
-    const currentVersion = num(currentRow[21]);
+    const currentVersion = Math.max(1, num(currentRow[21]));
     const previousRequest = auditRaw.find((row, index) =>
       index > 0 &&
       String(row[14] ?? "") === requestId &&
@@ -285,7 +285,7 @@ export default async (req: Request, context: Context) => {
       if (String(row[1] ?? "") !== studentId || norm(row[5]) !== "active") continue;
       const classId = String(row[2] ?? "");
       if (desiredSet.has(classId)) continue;
-      const enrollmentVersion = num(row[11]) + 1;
+      const enrollmentVersion = Math.max(1, num(row[11])) + 1;
       requests.push({ updateCells: { start: { sheetId: ids["Enrollments"], rowIndex: rawEnrollmentIndex, columnIndex: 4 }, rows: [{ values: [userValue(todaySerial), userValue("Ended")] }], fields: "userEnteredValue" } });
       requests.push({ updateCells: { start: { sheetId: ids["Enrollments"], rowIndex: rawEnrollmentIndex, columnIndex: 9 }, rows: [{ values: [userValue(now), userValue(actor.email), userValue(enrollmentVersion)] }], fields: "userEnteredValue" } });
     }
