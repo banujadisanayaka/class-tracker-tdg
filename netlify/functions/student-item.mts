@@ -67,7 +67,7 @@ function studentFromRow(r: Record<string, unknown>) {
     createdBy: String(r["Created By"] || ""),
     updatedAt: String(r["Updated At"] || ""),
     updatedBy: String(r["Updated By"] || ""),
-    version: Math.max(1, num(r["Version"])),
+    version: Math.max(1, num(r["Record Version"])),
   };
 }
 
